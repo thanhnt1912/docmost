@@ -2,28 +2,24 @@ services:
   docmost:
     image: docmost/docmost:latest
     depends_on:
-      - db
       - redis
     environment:
-      APP_URL: 'http://localhost:3000'
-      APP_SECRET: 'REPLACE_WITH_LONG_SECRET'
-      DATABASE_URL: 'postgresql://docmost:STRONG_DB_PASSWORD@db:5432/docmost'
+      APP_URL: 'https://edocs.nguyentracthanh.site'
+      APP_SECRET: '75f0dd2daccb8ce094740a8a9af16b8c2f09c6f5981dd1a5ae80ac3a452e9023'
+      DATABASE_URL: 'postgresql://cv:cv@postgres:5432/docmost'
       REDIS_URL: 'redis://redis:6379'
-    ports:
-      - "3000:3000"
     restart: unless-stopped
     volumes:
       - docmost:/app/data/storage
-
-  db:
-    image: postgres:18
-    environment:
-      POSTGRES_DB: docmost
-      POSTGRES_USER: docmost
-      POSTGRES_PASSWORD: STRONG_DB_PASSWORD
-    restart: unless-stopped
-    volumes:
-      - db_data:/var/lib/postgresql
+    networks:
+      - default
+      - traefik_cloudflare
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.docmost.rule=Host(`edocs.nguyentracthanh.site`)"
+      - "traefik.http.routers.docmost.entrypoints=web"
+      - "traefik.http.services.docmost.loadbalancer.server.port=3000"
+      - "traefik.docker.network=traefik_cloudflare"
 
   redis:
     image: redis:8
@@ -31,8 +27,13 @@ services:
     restart: unless-stopped
     volumes:
       - redis_data:/data
+    networks:
+      - default
 
 volumes:
   docmost:
-  db_data:
   redis_data:
+
+networks:
+  traefik_cloudflare:
+    external: true
