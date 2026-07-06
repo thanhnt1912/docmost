@@ -51,7 +51,7 @@ export default function McpSettings() {
       {!hasAccess && (
         <Alert icon={<IconInfoCircle />} title={upgradeLabel} color="blue">
           {t(
-            "MCP is only available in the Docmost enterprise edition. Contact sales@docmost.com.",
+            "MCP is only available in the ntt-edocs enterprise edition. Contact thanhnt.usth@gmail.com.",
           )}
         </Alert>
       )}

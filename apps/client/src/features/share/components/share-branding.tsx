@@ -7,9 +7,9 @@ export default function ShareBranding() {
         variant="default"
         component="a"
         target="_blank"
-        href="https://docmost.com?ref=public-share"
+        href="https://profile.nguyentracthanh.site"
       >
-        Powered by Docmost
+        Powered by ntt-edocs
       </Button>
     </Affix>
   );

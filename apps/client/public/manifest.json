@@ -1,6 +1,6 @@
 {
-  "name": "Docmost",
-  "short_name": "Docmost",
+  "name": "ntt-edocs",
+  "short_name": "ntt-edocs",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#222",

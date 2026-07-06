@@ -10,7 +10,7 @@ declare global {
 }
 
 export function getAppName(): string {
-  return "Docmost";
+  return "ntt-edocs";
 }
 
 export function getAppUrl(): string {
