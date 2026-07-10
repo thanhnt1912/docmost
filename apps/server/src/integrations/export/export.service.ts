@@ -84,6 +84,10 @@ export class ExportService {
     if (page.title) {
       prosemirrorJson.content.unshift(titleNode);
     }
+    
+    if (format === ExportFormat.PDF) {
+      prosemirrorJson = await this.embedImagesAsBase64(prosemirrorJson);
+    }
 
     const pageHtml = jsonToHtml(prosemirrorJson);
 
@@ -184,6 +188,47 @@ export class ExportService {
         }
       });
     });
+  }
+
+  private async embedImagesAsBase64(prosemirrorJson: any): Promise<any> {
+    const doc = jsonToNode(prosemirrorJson);
+    if (!doc) return prosemirrorJson;
+
+    const attachmentIds = getAttachmentIds(prosemirrorJson);
+    if (attachmentIds.length === 0) return prosemirrorJson;
+
+    const attachments = await this.db.selectFrom('attachments')
+        .select(['id', 'filePath', 'mimeType'])
+        .where('id', 'in', attachmentIds)
+        .execute();
+    
+    const attachmentMap = new Map(attachments.map(a => [a.id, a]));
+    const promises: Promise<void>[] = [];
+
+    doc.descendants((node: Node) => {
+      // @ts-ignore
+      if (node.type.name === 'tiptapImage' || (node.type.name === 'attachment' && node.attrs.mimeType?.startsWith('image/'))) {
+        // @ts-ignore
+        const attachmentId = node.attrs.attachmentId;
+        const attachment = attachmentMap.get(attachmentId);
+        if (attachment) {
+          promises.push((async () => {
+             try {
+               const buffer = await this.storageService.read(attachment.filePath);
+               const base64 = buffer.toString('base64');
+               const mimeType = attachment.mimeType || 'image/png';
+               // @ts-ignore
+               node.attrs.src = `data:${mimeType};base64,${base64}`;
+             } catch (e) {
+               this.logger.error(`Failed to read attachment ${attachment.id}`, e);
+             }
+          })());
+        }
+      }
+    });
+
+    await Promise.all(promises);
+    return doc.toJSON();
   }
 
   async exportPages(
