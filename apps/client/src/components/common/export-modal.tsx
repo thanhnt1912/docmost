@@ -198,6 +198,7 @@ function ExportFormatSelection({
   const data = [
     { value: "markdown", label: "Markdown" },
     { value: "html", label: "HTML" },
+    { value: "pdf", label: "PDF" },
     ...(includeDocx
       ? [{ value: "docx", label: "Word (.docx)", disabled: !docxEntitled }]
       : []),

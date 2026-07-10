@@ -9,6 +9,14 @@ services:
       APP_SECRET: '75f0dd2daccb8ce094740a8a9af16b8c2f09c6f5981dd1a5ae80ac3a452e9023'
       DATABASE_URL: 'postgresql://cv:cv@postgres:5432/docmost'
       REDIS_URL: 'redis://redis:6379'
+      STORAGE_DRIVER: s3
+      AWS_S3_ENDPOINT: http://minio:9000
+      AWS_S3_ACCESS_KEY_ID: ${MINIO_ROOT_USER:-minioadmin}
+      AWS_S3_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:-minioadmin}
+      AWS_S3_BUCKET: cv-uploads
+      AWS_S3_URL: https://storage-profile.nguyentracthanh.site
+      AWS_S3_REGION: us-east-1
+      AWS_S3_FORCE_PATH_STYLE: "true"
     restart: unless-stopped
     volumes:
       - docmost:/app/data/storage

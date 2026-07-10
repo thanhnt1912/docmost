@@ -11,6 +11,11 @@ import { InjectKysely } from 'nestjs-kysely';
 import { KyselyDB } from '@docmost/db/types/kysely.types';
 import * as JSZip from 'jszip';
 import { StorageService } from '../storage/storage.service';
+import * as puppeteer from 'puppeteer-core';
+import { exec } from 'child_process';
+import * as fs from 'fs';
+import * as os from 'os';
+import * as path from 'path';
 import {
   buildTree,
   computeLocalPath,
@@ -99,8 +104,86 @@ export class ExportService {
       );
       return htmlToMarkdown(newPageHtml);
     }
-
+    
+    if (format === ExportFormat.PDF) {
+      const html = `<!DOCTYPE html>
+      <html>
+        <head>
+         <title>${getPageTitle(page.title)}</title>
+         <style>
+           body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; padding: 20px; color: #37352f; line-height: 1.5; }
+           img { max-width: 100%; height: auto; border-radius: 4px; }
+           table { border-collapse: collapse; width: 100%; margin: 16px 0; }
+           th, td { border: 1px solid #e1e4e8; padding: 8px 12px; text-align: left; }
+           th { background-color: #f6f8fa; }
+           blockquote { border-left: 4px solid #dfe2e5; margin: 0; padding-left: 16px; color: #6a737d; }
+           code { background-color: rgba(27,31,35,0.05); padding: 0.2em 0.4em; border-radius: 3px; font-family: ui-monospace, SFMono-Regular, SF Mono, Menlo, Consolas, Liberation Mono, monospace; font-size: 85%; }
+           pre { background-color: #f6f8fa; padding: 16px; border-radius: 6px; overflow: auto; line-height: 1.45; }
+           pre code { background-color: transparent; padding: 0; font-size: 100%; }
+           h1, h2, h3, h4, h5, h6 { margin-top: 24px; margin-bottom: 16px; font-weight: 600; line-height: 1.25; }
+           h1 { font-size: 2em; border-bottom: 1px solid #eaecef; padding-bottom: 0.3em; }
+           h2 { font-size: 1.5em; border-bottom: 1px solid #eaecef; padding-bottom: 0.3em; }
+           ul[data-type="taskList"] { list-style: none; padding-left: 0; }
+           li[data-type="taskItem"] { display: flex; margin-bottom: 4px; }
+           li[data-type="taskItem"] > label { margin-right: 8px; }
+           div[data-type="callout"] { padding: 16px; background-color: #f8f9fa; border-left: 4px solid #0366d6; border-radius: 4px; margin: 16px 0; }
+         </style>
+        </head>
+        <body>${pageHtml}</body>
+      </html>`;
+      return this.convertHtmlToPdfBuffer(html);
+    }
     return;
+  }
+
+  private async convertHtmlToPdfBuffer(htmlContent: string): Promise<Buffer> {
+    const browser = await puppeteer.launch({
+      executablePath: '/usr/bin/chromium',
+      args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'],
+    });
+
+    try {
+      const page = await browser.newPage();
+      await page.setContent(htmlContent, { waitUntil: 'load' });
+      const pdfBuffer = await page.pdf({
+        format: 'A4',
+        printBackground: true,
+        margin: { top: '1cm', right: '1cm', bottom: '1cm', left: '1cm' },
+      });
+      return await this.compressPdfBuffer(Buffer.from(pdfBuffer));
+    } finally {
+      await browser.close();
+    }
+  }
+
+  private async compressPdfBuffer(inputBuffer: Buffer): Promise<Buffer> {
+    const tmpDir = os.tmpdir();
+    const inputPath = path.join(tmpDir, `input-${Date.now()}-${Math.random()}.pdf`);
+    const outputPath = path.join(tmpDir, `output-${Date.now()}-${Math.random()}.pdf`);
+
+    await fs.promises.writeFile(inputPath, inputBuffer);
+
+    return new Promise((resolve, reject) => {
+      const gsCommand = `gs -sDEVICE=pdfwrite -dCompatibilityLevel=1.4 -dPDFSETTINGS=/screen -dNOPAUSE -dQUIET -dBATCH -sOutputFile=${outputPath} ${inputPath}`;
+      
+      exec(gsCommand, async (error) => {
+        try {
+          if (error) {
+            this.logger.warn(`Ghostscript compression failed, falling back to original: ${error.message}`);
+            resolve(inputBuffer);
+          } else {
+            const compressedBuffer = await fs.promises.readFile(outputPath);
+            resolve(compressedBuffer);
+          }
+        } catch (readError) {
+          this.logger.warn(`Failed to read compressed file, falling back to original`);
+          resolve(inputBuffer);
+        } finally {
+          fs.promises.unlink(inputPath).catch(() => {});
+          fs.promises.unlink(outputPath).catch(() => {});
+        }
+      });
+    });
   }
 
   async exportPages(

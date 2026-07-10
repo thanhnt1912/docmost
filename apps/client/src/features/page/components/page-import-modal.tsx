@@ -97,8 +97,6 @@ function ImportFormatSelection({ spaceId, onClose }: ImportFormatSelection) {
   const zipFileRef = useRef<() => void>(null);
 
   const canUseConfluence = useHasFeature(Feature.CONFLUENCE_IMPORT);
-  const canUseDocx = useHasFeature(Feature.DOCX_IMPORT);
-  const canUsePdf = useHasFeature(Feature.PDF_IMPORT);
   const upgradeLabel = useUpgradeLabel();
 
   const handleZipUpload = async (selectedFile: File, source: string) => {
@@ -384,12 +382,7 @@ function ImportFormatSelection({ spaceId, onClose }: ImportFormatSelection) {
           }}
         >
           {(props) => (
-            <Tooltip
-              label={upgradeLabel}
-              disabled={canUseDocx}
-            >
               <Button
-                disabled={!canUseDocx}
                 justify="start"
                 variant="default"
                 leftSection={<IconFileTypeDocx size={18} />}
@@ -397,7 +390,6 @@ function ImportFormatSelection({ spaceId, onClose }: ImportFormatSelection) {
               >
                 Word (DOCX)
               </Button>
-            </Tooltip>
           )}
         </FileButton>
 
@@ -411,12 +403,7 @@ function ImportFormatSelection({ spaceId, onClose }: ImportFormatSelection) {
           }}
         >
           {(props) => (
-            <Tooltip
-              label={upgradeLabel}
-              disabled={canUsePdf}
-            >
               <Button
-                disabled={!canUsePdf}
                 justify="start"
                 variant="default"
                 leftSection={<IconFileTypePdf size={18} />}
@@ -424,7 +411,6 @@ function ImportFormatSelection({ spaceId, onClose }: ImportFormatSelection) {
               >
                 PDF
               </Button>
-            </Tooltip>
           )}
         </FileButton>
 

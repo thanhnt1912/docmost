@@ -1,5 +1,8 @@
 import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { PageRepo } from '@docmost/db/repos/page/page.repo';
+import * as mammoth from 'mammoth';
+import { getAttachmentFolderPath } from '../../../core/attachment/attachment.utils';
+import { AttachmentType } from '../../../core/attachment/attachment.constants';
 import { MultipartFile } from '@fastify/multipart';
 import * as path from 'path';
 import {
@@ -166,33 +169,47 @@ export class ImportService {
     pageId: string,
     userId: string,
   ): Promise<any> {
-    let DocxImportModule: any;
     try {
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      DocxImportModule = require('./../../../ee/document-import/docx-import.service');
+      const options = {
+        convertImage: mammoth.images.imgElement(async (image) => {
+          const imageBuffer = await image.read();
+          const extension = image.contentType.split('/')[1] || 'png';
+          const attachmentId = uuid7();
+          const fileName = `image.${extension}`;
+          const storageFilePath = `${getAttachmentFolderPath(
+            AttachmentType.File,
+            workspaceId,
+          )}/${attachmentId}/${fileName}`;
+          const apiFilePath = `/api/files/${attachmentId}/${fileName}`;
+
+          await this.storageService.upload(storageFilePath, imageBuffer);
+
+          await this.db
+            .insertInto('attachments')
+            .values({
+              id: attachmentId,
+              filePath: storageFilePath,
+              fileName: fileName,
+              fileSize: imageBuffer.length,
+              mimeType: image.contentType,
+              type: 'file',
+              fileExt: `.${extension}`,
+              creatorId: userId,
+              workspaceId: workspaceId,
+              pageId: pageId,
+              spaceId: spaceId,
+            })
+            .execute();
+
+          return { src: apiFilePath };
+        }),
+      };
+      const result = await mammoth.convertToHtml({ buffer: fileBuffer }, options);
+      return this.processHTML(result.value);
     } catch (err) {
-      this.logger.error(
-        'DOCX import requested but EE module not bundled in this build',
-      );
-      throw new BadRequestException(
-        'This feature requires a valid enterprise license.',
-      );
+      this.logger.error('Failed to parse docx', err);
+      throw new BadRequestException('Failed to process DOCX file.');
     }
-
-    const docxImportService = this.moduleRef.get(
-      DocxImportModule.DocxImportService,
-      { strict: false },
-    );
-
-    const html = await docxImportService.convertDocxToHtml(
-      fileBuffer,
-      workspaceId,
-      spaceId,
-      pageId,
-      userId,
-    );
-
-    return this.processHTML(html);
   }
 
   async processPdf(
@@ -202,33 +219,56 @@ export class ImportService {
     pageId: string,
     userId: string,
   ): Promise<any> {
-    let PdfImportModule: any;
     try {
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      PdfImportModule = require('./../../../ee/document-import/pdf-import.service');
+      const attachmentId = uuid7();
+      const fileName = 'document.pdf';
+      const storageFilePath = `${getAttachmentFolderPath(
+        AttachmentType.File,
+        workspaceId,
+      )}/${attachmentId}/${fileName}`;
+      const apiFilePath = `/api/files/${attachmentId}/${fileName}`;
+
+      await this.storageService.upload(storageFilePath, fileBuffer);
+
+      await this.db
+        .insertInto('attachments')
+        .values({
+          id: attachmentId,
+          filePath: storageFilePath,
+          fileName: fileName,
+          fileSize: fileBuffer.length,
+          mimeType: 'application/pdf',
+          type: 'file',
+          fileExt: '.pdf',
+          creatorId: userId,
+          workspaceId: workspaceId,
+          pageId: pageId,
+          spaceId: spaceId,
+        })
+        .execute();
+
+      const prosemirrorJson = {
+        type: 'doc',
+        content: [
+          {
+            type: 'pdf',
+            attrs: {
+              src: apiFilePath,
+              attachmentId: attachmentId,
+              name: fileName,
+              size: fileBuffer.length,
+              width: 800,
+              height: 600,
+            },
+          },
+        ],
+      };
+
+      return prosemirrorJson;
     } catch (err) {
-      this.logger.error(
-        'PDF import requested but EE module not bundled in this build',
-      );
-      throw new BadRequestException(
-        'This feature requires a valid enterprise license.',
-      );
+      this.logger.error('Failed to parse pdf', err);
+      throw new BadRequestException('Failed to process PDF file.');
     }
-
-    const pdfImportService = this.moduleRef.get(
-      PdfImportModule.PdfImportService,
-      { strict: false },
-    );
-
-    const html = await pdfImportService.convertPdfToHtml(
-      fileBuffer,
-      workspaceId,
-      spaceId,
-      pageId,
-      userId,
-    );
-
-    return this.processHTML(html);
   }
 
   async createYdoc(prosemirrorJson: any): Promise<Buffer | null> {
